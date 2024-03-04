@@ -15,7 +15,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         self,
         mapsize: int = 64,
         attackerspeedadvantage: int = 2,
-        attackeradvantagefactor: float = 0.8,
+        attackeradvantagefactor: float = 1.8,
         econtomilitaryconvrate: float = 0.2,
         econboomrate: float = 0.2,
         nclusters: int = 6,
