@@ -4,3 +4,8 @@ Utilizes one additional package from the original demo implementation, attainabl
 ```
 pip install mcts
 ```
+
+Adds an MCTS bot
+
+Adds funcitonality described in PA4 with specific rates of conversion for booming andrushing, and additional benefits for attacking tensors.
+Adds `set_state()` function to TensorRTS environment to allow easy simulation.
