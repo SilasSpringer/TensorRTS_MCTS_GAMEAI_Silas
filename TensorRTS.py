@@ -13,7 +13,11 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
 
     def __init__(
         self,
-        mapsize: int = 32,
+        mapsize: int = 64,
+        attackerspeedadvantage: int = 2,
+        attackeradvantagefactor: float = 0.8,
+        econtomilitaryconvrate: float = 0.2,
+        econboomrate: float = 0.2,
         nclusters: int = 6,
         ntensors: int = 2,
         maxdots: int = 9,
@@ -27,6 +31,12 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         self.mapsize = mapsize
         self.maxdots = maxdots
         self.nclusters = nclusters
+
+        self.attackerspeedadvantage = attackerspeedadvantage
+        self.attackeradvantagefactor = attackeradvantagefactor
+        self.econtomilitaryconvrate = econtomilitaryconvrate
+        self.econboomrate = econboomrate
+
         self.clusters: List[List[int]] = []  # The inner list has a size of 2 (position, number of dots).
         self.tensors: List[List[int ]] = [] # The inner list has a size of 4 (position, dimension, x, y).
 
@@ -70,8 +80,12 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         self.reward = state.reward
         self.clusters = state.features["Cluster"]
         self.tensors = state.features["Tensor"]
+        # self.print_universe()
 
     def tensor_power(self, tensor_index) -> float :
+        f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2] * \
+            self.attackeradvantagefactor * (1 + abs((self.tensors[tensor_index][0] - 0.5*self.mapsize)/self.mapsize))
+
         f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2]
         if self.enable_printouts:
             print(f"TP({tensor_index})=TP({self.tensors[tensor_index]})={f}")
@@ -82,7 +96,8 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         if done:
             reward = 10 if self.tensor_power(0) > self.tensor_power(1) else 0 if self.tensor_power(0) == self.tensor_power(1) else -10
         else:
-            reward = 1.0 if self.tensors[0][1] > self.tensors[1][1] else 0.0
+            # reward = 1.0 if self.tensors[0][1] > self.tensors[1][1] else 0.0
+            # reward += 0.1*self.tensors[0][0] # reward for going towards opponent
             reward = 0
         return Observation(
             entities={
@@ -104,25 +119,27 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
 
     def act(self, actions: Mapping[ActionName, Action], trigger_default_opponent_action : bool = True, is_player_two : bool = False) -> Observation:
         action = actions["Move"]
-
         player_tensor = self.tensors[0]
+        direction = 1
         if is_player_two:
             player_tensor = self.tensors[1]
+            direction = -1
 
         assert isinstance(action, GlobalCategoricalAction)
         if action.label == "advance" and self.tensors[0][0] < self.mapsize:
-            player_tensor[0] += 1
+            player_tensor[0] += self.attackerspeedadvantage*direction
             player_tensor[2] += self.collect_dots(player_tensor[0])
         elif action.label == "retreat" and player_tensor[0] > 0:
-            player_tensor[0] -= 1
+            player_tensor[0] -= 1*direction
             player_tensor[2] += self.collect_dots(player_tensor[0])
         elif action.label == "boom":
-            player_tensor[2] += 1
+            player_tensor[2] += max(1, self.econboomrate*player_tensor[2])
         elif action.label == "rush":
             if player_tensor[2] >= 1:
                 player_tensor[1] = 2 # the number of dimensions is now 2
-                player_tensor[2] -= 1
-                player_tensor[3] += 1
+                militaryconversion = max(1, self.econtomilitaryconvrate*player_tensor[2])
+                player_tensor[2] -= militaryconversion
+                player_tensor[3] += militaryconversion
 
         if trigger_default_opponent_action:
             self.opponent_act()

@@ -12,8 +12,8 @@ from entity_gym.env import Observation
 from entity_gym.runner import CliRunner
 from entity_gym.env import *
 
-NUM_GAMES_PER_ROUND = 3
-NUM_GAMES_WIN_BY_TO_VICTORY = 1
+NUM_GAMES_PER_ROUND = 10
+NUM_GAMES_WIN_BY_TO_VICTORY = 2
 
 class Bot(): 
 
@@ -86,8 +86,10 @@ class Matchup():
             num_rounds_played += 1
 
         if num_wins_p_one > num_wins_p_two: 
+            print(self.first_bot.student_name, " wins as P1")
             self.final_result = GameResult(player_one_win=True)
         elif num_wins_p_two > num_wins_p_one:
+            print(self.second_bot.student_name, " wins as p2")
             self.final_result = GameResult(player_two_win=True)
         else:
             raise Exception('Number of wins for each player is the same. This should not happen.')
@@ -183,7 +185,7 @@ class Tournament():
 
     def print_results(self) -> None: 
         results : list[str] = []
-        results.append('-Beginning Tournament Prinout-')
+        results.append('-Beginning Tournament Printout-')
         results.append("Tournament Settings: ")
         results.append(f'Winner: {self.winner.student_name}')
         results.append(f'\tNumber of games in each match: {self.num_rounds_per_match}')
