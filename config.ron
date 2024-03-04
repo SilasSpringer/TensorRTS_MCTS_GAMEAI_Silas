@@ -1,0 +1,12 @@
+Config(
+    total_timesteps: 10000,
+    rollout: (
+        steps: 32,
+        num_envs: 64,
+        processes: 4,
+    ),
+    optim: (
+        bs: 512,
+        lr: 0.005,
+    ),
+)
