@@ -108,7 +108,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
 
         ## credit to James Pennington for the reversal implementation
         ## https://github.com/jp013718/TensorRTS_Selfplay 
-        if player == 1:
+        if player == 0:
             opp_clusters = [[self.mapsize - i - 1, j] for i,j in self.clusters]
             for cluster in opp_clusters:
                 cluster[0] = self.mapsize - cluster[0] - 1
@@ -119,11 +119,11 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
             entities={
                 "Cluster": (
                     self.clusters,
-                    [("Cluster", i) for i in range(len(self.clusters if player == 0 else opp_clusters ))],
+                    [("Cluster", i) for i in range(len(self.clusters if player == 1 else opp_clusters ))],
                 ),
                 "Tensor": (
                     self.tensors,
-                    [("Tensor", i) for i in range(len(self.tensors if player == 0 else opp_tensors ))],
+                    [("Tensor", i) for i in range(len(self.tensors if player == 1 else opp_tensors ))],
                 ),
             },
             actions={
