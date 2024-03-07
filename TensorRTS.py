@@ -5,6 +5,7 @@ from entity_gym.env import Observation
 
 from entity_gym.runner import CliRunner
 from entity_gym.env import *
+import numpy as np
 
 class TensorRTS(Environment):
     """
@@ -21,9 +22,9 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         nclusters: int = 6,
         ntensors: int = 2,
         maxdots: int = 9,
-        enable_prinouts : bool = True
+        enable_printouts : bool = True
     ):
-        self.enable_printouts = enable_prinouts
+        self.enable_printouts = enable_printouts
         
         if self.enable_printouts:
             print(f"LinearRTS -- Mapsize: {mapsize}")
@@ -72,7 +73,6 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
 
         if self.enable_printouts:
             self.print_universe()
-
         return self.observe()
     
     def set_state(self, state : Observation):
@@ -80,34 +80,50 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         self.reward = state.reward
         self.clusters = state.features["Cluster"]
         self.tensors = state.features["Tensor"]
-        # self.print_universe()
 
     def tensor_power(self, tensor_index) -> float :
         f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2] * \
             self.attackeradvantagefactor * (1 + abs((self.tensors[tensor_index][0] - 0.5*self.mapsize)/self.mapsize))
 
-        f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2]
+        # f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2]
         if self.enable_printouts:
             print(f"TP({tensor_index})=TP({self.tensors[tensor_index]})={f}")
         return f
 
-    def observe(self) -> Observation:
+    def observe(self, player = 0) -> Observation:
+        if player > 1 or player < 0:
+            print("ERROR, player index out of bounds in observe")
+            exit(-1)
+        other = 1
+        if player == 1:
+            other = 0
+
         done = self.tensors[0][0] >= self.tensors[1][0]
         if done:
-            reward = 10 if self.tensor_power(0) > self.tensor_power(1) else 0 if self.tensor_power(0) == self.tensor_power(1) else -10
+            reward = 10 if self.tensor_power(player) > self.tensor_power(other) else 0 if self.tensor_power(player) == self.tensor_power(other) else -10
         else:
-            # reward = 1.0 if self.tensors[0][1] > self.tensors[1][1] else 0.0
-            # reward += 0.1*self.tensors[0][0] # reward for going towards opponent
-            reward = 0
+            reward = 1.0 if self.tensors[player][1] > self.tensors[other][1] else 0.0 # reward having a higher dimension than the other player
+            # reward += 0.1*self.tensors[player][0] # reward for going towards opponent
+            # reward = 0
+
+        ## credit to James Pennington for the reversal implementation
+        ## https://github.com/jp013718/TensorRTS_Selfplay 
+        if player == 1:
+            opp_clusters = [[self.mapsize - i - 1, j] for i,j in self.clusters]
+            for cluster in opp_clusters:
+                cluster[0] = self.mapsize - cluster[0] - 1
+            opp_tensors = [[self.mapsize - i - 1, j, k, l] for i,j,k,l in self.tensors]
+            for tensor in opp_tensors:
+                tensor[0] = self.mapsize - tensor[0] - 1
         return Observation(
             entities={
                 "Cluster": (
                     self.clusters,
-                    [("Cluster", i) for i in range(len(self.clusters))],
+                    [("Cluster", i) for i in range(len(self.clusters if player == 0 else opp_clusters ))],
                 ),
                 "Tensor": (
                     self.tensors,
-                    [("Tensor", i) for i in range(len(self.tensors))],
+                    [("Tensor", i) for i in range(len(self.tensors if player == 0 else opp_tensors ))],
                 ),
             },
             actions={
@@ -126,18 +142,28 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
             direction = -1
 
         assert isinstance(action, GlobalCategoricalAction)
-        if action.label == "advance" and self.tensors[0][0] < self.mapsize:
-            player_tensor[0] += self.attackerspeedadvantage*direction
-            player_tensor[2] += self.collect_dots(player_tensor[0])
-        elif action.label == "retreat" and player_tensor[0] > 0:
+        if action.label == "advance":
+            ipos = player_tensor[0]
+            if player_tensor[0] + self.attackerspeedadvantage*direction > self.mapsize: # if the player would go outside the map (right), go to the end of the map instead
+                player_tensor[0] = self.mapsize-1
+            elif player_tensor[0] + self.attackerspeedadvantage*direction <= 0: # if the player would go outside the map (left), go to the beginning of the map instead
+                player_tensor[0] = 0
+            else: # in the case the move doesnt collide with an end of the map, move normally and collect dots you pass. note that this means large attacker speed advantages 
+                  # can mean you move past dots without collecting them if you jump over them when hitting the edge of the map
+                player_tensor[0] += self.attackerspeedadvantage*direction
+                for x in range(player_tensor[0], ipos, -direction):
+                    player_tensor[2] += self.collect_dots(x)
+        elif action.label == "retreat" and player_tensor[0] > 0: # move 'back' one to retreat. 'back' is relative to the player, player two moves right, player one moves left.
             player_tensor[0] -= 1*direction
             player_tensor[2] += self.collect_dots(player_tensor[0])
-        elif action.label == "boom":
-            player_tensor[2] += max(1, self.econboomrate*player_tensor[2])
-        elif action.label == "rush":
-            if player_tensor[2] >= 1:
+        elif action.label == "boom": # boom, increase dimension 1 (x) by the maximum of 1 or econboomrate*x. 
+            player_tensor[2] += int(max(1, self.econboomrate*player_tensor[2]))
+        elif action.label == "rush": # rush, convert economy (x) to military (y)
+            if player_tensor[2] >= 1: # if you have some economy, you cna convert some to military.
                 player_tensor[1] = 2 # the number of dimensions is now 2
-                militaryconversion = max(1, self.econtomilitaryconvrate*player_tensor[2])
+                militaryconversion = int(max(1, self.econtomilitaryconvrate*player_tensor[2])) # convert the max of 1 and econtomilitaryconversionrate*x to y
+                if militaryconversion > player_tensor[2]: # if econtomilitaryconversionrate*x is greater than x, only convert x - cant have negative economy.
+                    militaryconversion = player_tensor[2]
                 player_tensor[2] -= militaryconversion
                 player_tensor[3] += militaryconversion
 
@@ -147,7 +173,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         if self.enable_printouts:
             self.print_universe()
 
-        return self.observe()
+        return self.observe(1 if is_player_two else 0)
 
     def opponent_act(self):         # This is the rush AI.
         if self.tensors[1][2]>0 :   # Rush if possile
@@ -158,7 +184,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
             self.tensors[1][0] -= 1
             self.tensors[1][2] += self.collect_dots(self.tensors[1][0])
 
-        return self.observe()
+        return self.observe(1)
 
     def collect_dots(self, position):
         low, high = 0, len(self.clusters) - 1
@@ -215,7 +241,7 @@ class Interactive_TensorRTS(TensorRTS):
         enable_printouts : bool = True): 
         self.is_game_over = False
 
-        super().__init__(mapsize, nclusters, ntensors, maxdots, enable_prinouts=enable_printouts)
+        super().__init__(mapsize, nclusters, ntensors, maxdots, enable_printouts=enable_printouts)
 
     def act(self, actions: Mapping[ActionName, Action],  trigger_default_opponent_action : bool = True, is_player_two : bool = False, print_universe : bool = False) -> Observation:
         obs_result = super().act(actions, False, is_player_two)
@@ -314,6 +340,7 @@ class GameRunner():
                 else:
                     #future player_two code
                     game_state = self.game.act(self.player_two.take_turn(game_state), False, True)
+            # self.game.print_universe()
 
         # who won? 
         tie = False
