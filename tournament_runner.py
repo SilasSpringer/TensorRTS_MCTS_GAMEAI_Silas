@@ -65,7 +65,7 @@ class Matchup():
             if num_rounds_played >= num_rounds and abs(num_wins_p_one - num_wins_p_two) >= num_rounds_must_win_by_to_win:
                 done = True
                 break
-            new_game = GameRunner()
+            new_game = GameRunner(enable_printouts=True)
             
             #create bot instances
             observation = new_game.game.observe()

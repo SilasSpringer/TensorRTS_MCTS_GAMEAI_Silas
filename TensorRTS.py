@@ -5,6 +5,7 @@ from entity_gym.env import Observation
 
 from entity_gym.runner import CliRunner
 from entity_gym.env import *
+import numpy as np
 
 class TensorRTS(Environment):
     """
@@ -91,23 +92,40 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
             print(f"TP({tensor_index})=TP({self.tensors[tensor_index]})={f}")
         return f
 
-    def observe(self) -> Observation:
+    def observe(self, player = 0) -> Observation:
+        if player > 1 or player < 0:
+            print("ERROR, player index out of bounds in observe")
+            exit(-1)
+        other = 1
+        if player == 1:
+            other = 0
+
         done = self.tensors[0][0] >= self.tensors[1][0]
         if done:
-            reward = 10 if self.tensor_power(0) > self.tensor_power(1) else 0 if self.tensor_power(0) == self.tensor_power(1) else -10
+            reward = 10 if self.tensor_power(player) > self.tensor_power(other) else 0 if self.tensor_power(player) == self.tensor_power(other) else -10
         else:
-            # reward = 1.0 if self.tensors[0][1] > self.tensors[1][1] else 0.0
-            # reward += 0.1*self.tensors[0][0] # reward for going towards opponent
-            reward = 0
+            reward = 1.0 if self.tensors[player][1] > self.tensors[other][1] else 0.0 # reward having a higher dimension than the other player
+            # reward += 0.1*self.tensors[player][0] # reward for going towards opponent
+            # reward = 0
+
+        ## credit to James Pennington for the reversal implementation
+        ## https://github.com/jp013718/TensorRTS_Selfplay 
+        if player == 1:
+            opp_clusters = [[self.mapsize - i - 1, j] for i,j in self.clusters]
+            for cluster in opp_clusters:
+                cluster[0] = self.mapsize - cluster[0] - 1
+            opp_tensors = [[self.mapsize - i - 1, j, k, l] for i,j,k,l in self.tensors]
+            for tensor in opp_tensors:
+                tensor[0] = self.mapsize - tensor[0] - 1
         return Observation(
             entities={
                 "Cluster": (
                     self.clusters,
-                    [("Cluster", i) for i in range(len(self.clusters))],
+                    [("Cluster", i) for i in range(len(self.clusters if player == 0 else opp_clusters ))],
                 ),
                 "Tensor": (
                     self.tensors,
-                    [("Tensor", i) for i in range(len(self.tensors))],
+                    [("Tensor", i) for i in range(len(self.tensors if player == 0 else opp_tensors ))],
                 ),
             },
             actions={
@@ -126,18 +144,27 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
             direction = -1
 
         assert isinstance(action, GlobalCategoricalAction)
-        if action.label == "advance" and self.tensors[0][0] < self.mapsize:
-            player_tensor[0] += self.attackerspeedadvantage*direction
-            player_tensor[2] += self.collect_dots(player_tensor[0])
+        if action.label == "advance":
+            ipos = player_tensor[0]
+            if player_tensor[0] + self.attackerspeedadvantage*direction >= self.mapsize:
+                player_tensor[0] = self.mapsize
+            elif player_tensor[0] + self.attackerspeedadvantage*direction <= 0:
+                player_tensor[0] = 0
+            else:
+                player_tensor[0] += self.attackerspeedadvantage*direction
+                for x in range(player_tensor[0], ipos, -direction):
+                    player_tensor[2] += self.collect_dots(x)
         elif action.label == "retreat" and player_tensor[0] > 0:
             player_tensor[0] -= 1*direction
             player_tensor[2] += self.collect_dots(player_tensor[0])
         elif action.label == "boom":
-            player_tensor[2] += max(1, self.econboomrate*player_tensor[2])
+            player_tensor[2] += int(max(1, self.econboomrate*player_tensor[2]))
         elif action.label == "rush":
             if player_tensor[2] >= 1:
                 player_tensor[1] = 2 # the number of dimensions is now 2
-                militaryconversion = max(1, self.econtomilitaryconvrate*player_tensor[2])
+                militaryconversion = int(max(1, self.econtomilitaryconvrate*player_tensor[2]))
+                if militaryconversion > player_tensor[2]:
+                    militaryconversion = 1
                 player_tensor[2] -= militaryconversion
                 player_tensor[3] += militaryconversion
 
@@ -147,7 +174,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         if self.enable_printouts:
             self.print_universe()
 
-        return self.observe()
+        return self.observe(1 if is_player_two else 0)
 
     def opponent_act(self):         # This is the rush AI.
         if self.tensors[1][2]>0 :   # Rush if possile
@@ -158,7 +185,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
             self.tensors[1][0] -= 1
             self.tensors[1][2] += self.collect_dots(self.tensors[1][0])
 
-        return self.observe()
+        return self.observe(1)
 
     def collect_dots(self, position):
         low, high = 0, len(self.clusters) - 1
@@ -180,7 +207,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
 
     def print_universe(self):
         #    print(self.clusters)
-        #    print(self.tensors)
+        print(self.tensors)
         for j in range(self.mapsize):
             print(f" {j%10}", end="")
         print(" #")
@@ -314,6 +341,7 @@ class GameRunner():
                 else:
                     #future player_two code
                     game_state = self.game.act(self.player_two.take_turn(game_state), False, True)
+            # self.game.print_universe()
 
         # who won? 
         tie = False

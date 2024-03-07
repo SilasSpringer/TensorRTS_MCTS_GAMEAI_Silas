@@ -24,10 +24,9 @@ class New_Agent(Agent):
         return super().on_game_over(did_i_win, did_i_tie)
     
     def take_turn(self, current_game_State : Observation) -> Mapping[ActionName, Action]:
-        tree = mcts(timeLimit=1000)
-        selected_node = tree.search(initialState=MCTS_State(current_game_State, list(enumerate(self.action_space["Move"].index_to_label)) ))
+        tree = mcts(iterationLimit=1000)
         # action_choice = 1
-        action_choice = selected_node
+        action_choice = tree.search(initialState=MCTS_State(current_game_State, list(enumerate(self.action_space["Move"].index_to_label)) ))
         print(action_choice)
         return map_move(action_choice[0], action_choice[1])
 
