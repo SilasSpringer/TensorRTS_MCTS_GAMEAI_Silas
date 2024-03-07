@@ -22,9 +22,9 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         nclusters: int = 6,
         ntensors: int = 2,
         maxdots: int = 9,
-        enable_prinouts : bool = True
+        enable_printouts : bool = True
     ):
-        self.enable_printouts = enable_prinouts
+        self.enable_printouts = enable_printouts
         
         if self.enable_printouts:
             print(f"LinearRTS -- Mapsize: {mapsize}")
@@ -73,7 +73,6 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
 
         if self.enable_printouts:
             self.print_universe()
-
         return self.observe()
     
     def set_state(self, state : Observation):
@@ -81,13 +80,12 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         self.reward = state.reward
         self.clusters = state.features["Cluster"]
         self.tensors = state.features["Tensor"]
-        # self.print_universe()
 
     def tensor_power(self, tensor_index) -> float :
         f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2] * \
             self.attackeradvantagefactor * (1 + abs((self.tensors[tensor_index][0] - 0.5*self.mapsize)/self.mapsize))
 
-        f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2]
+        # f = self.tensors[tensor_index][3] * self.tensors[tensor_index][3] +  self.tensors[tensor_index][2]
         if self.enable_printouts:
             print(f"TP({tensor_index})=TP({self.tensors[tensor_index]})={f}")
         return f
@@ -146,25 +144,26 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
         assert isinstance(action, GlobalCategoricalAction)
         if action.label == "advance":
             ipos = player_tensor[0]
-            if player_tensor[0] + self.attackerspeedadvantage*direction >= self.mapsize:
-                player_tensor[0] = self.mapsize
-            elif player_tensor[0] + self.attackerspeedadvantage*direction <= 0:
+            if player_tensor[0] + self.attackerspeedadvantage*direction > self.mapsize: # if the player would go outside the map (right), go to the end of the map instead
+                player_tensor[0] = self.mapsize-1
+            elif player_tensor[0] + self.attackerspeedadvantage*direction <= 0: # if the player would go outside the map (left), go to the beginning of the map instead
                 player_tensor[0] = 0
-            else:
+            else: # in the case the move doesnt collide with an end of the map, move normally and collect dots you pass. note that this means large attacker speed advantages 
+                  # can mean you move past dots without collecting them if you jump over them when hitting the edge of the map
                 player_tensor[0] += self.attackerspeedadvantage*direction
                 for x in range(player_tensor[0], ipos, -direction):
                     player_tensor[2] += self.collect_dots(x)
-        elif action.label == "retreat" and player_tensor[0] > 0:
+        elif action.label == "retreat" and player_tensor[0] > 0: # move 'back' one to retreat. 'back' is relative to the player, player two moves right, player one moves left.
             player_tensor[0] -= 1*direction
             player_tensor[2] += self.collect_dots(player_tensor[0])
-        elif action.label == "boom":
+        elif action.label == "boom": # boom, increase dimension 1 (x) by the maximum of 1 or econboomrate*x. 
             player_tensor[2] += int(max(1, self.econboomrate*player_tensor[2]))
-        elif action.label == "rush":
-            if player_tensor[2] >= 1:
+        elif action.label == "rush": # rush, convert economy (x) to military (y)
+            if player_tensor[2] >= 1: # if you have some economy, you cna convert some to military.
                 player_tensor[1] = 2 # the number of dimensions is now 2
-                militaryconversion = int(max(1, self.econtomilitaryconvrate*player_tensor[2]))
-                if militaryconversion > player_tensor[2]:
-                    militaryconversion = 1
+                militaryconversion = int(max(1, self.econtomilitaryconvrate*player_tensor[2])) # convert the max of 1 and econtomilitaryconversionrate*x to y
+                if militaryconversion > player_tensor[2]: # if econtomilitaryconversionrate*x is greater than x, only convert x - cant have negative economy.
+                    militaryconversion = player_tensor[2]
                 player_tensor[2] -= militaryconversion
                 player_tensor[3] += militaryconversion
 
@@ -207,7 +206,7 @@ LinearRTS, the first epoch of TensorRTS, is intended to be the simplest RTS game
 
     def print_universe(self):
         #    print(self.clusters)
-        print(self.tensors)
+        #    print(self.tensors)
         for j in range(self.mapsize):
             print(f" {j%10}", end="")
         print(" #")
@@ -242,7 +241,7 @@ class Interactive_TensorRTS(TensorRTS):
         enable_printouts : bool = True): 
         self.is_game_over = False
 
-        super().__init__(mapsize, nclusters, ntensors, maxdots, enable_prinouts=enable_printouts)
+        super().__init__(mapsize, nclusters, ntensors, maxdots, enable_printouts=enable_printouts)
 
     def act(self, actions: Mapping[ActionName, Action],  trigger_default_opponent_action : bool = True, is_player_two : bool = False, print_universe : bool = False) -> Observation:
         obs_result = super().act(actions, False, is_player_two)

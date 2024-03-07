@@ -17,6 +17,8 @@ class New_Agent(Agent):
     def __init__(self, initial_observation: Observation, action_space: Dict[str, CategoricalActionSpace | SelectEntityActionSpace | GlobalCategoricalActionSpace]):
         super().__init__(initial_observation, action_space)
     
+    # def on_game_start(self, is_player_one : bool, is_player_two : bool) -> None:
+    #     return super().on_game_start(is_player_one, is_player_two)
     def on_game_start(self) -> None:
         return super().on_game_start()
     
@@ -24,10 +26,11 @@ class New_Agent(Agent):
         return super().on_game_over(did_i_win, did_i_tie)
     
     def take_turn(self, current_game_State : Observation) -> Mapping[ActionName, Action]:
+        # tree = mcts(timeLimit=1000)
         tree = mcts(iterationLimit=1000)
         # action_choice = 1
         action_choice = tree.search(initialState=MCTS_State(current_game_State, list(enumerate(self.action_space["Move"].index_to_label)) ))
-        print(action_choice)
+        # print(action_choice)
         return map_move(action_choice[0], action_choice[1])
 
 class MCTS_State(Observation):
@@ -52,6 +55,7 @@ class MCTS_State(Observation):
     def getReward(self):
         return self.state.reward
 
+
 def map_move(idx : int , label : str):
     action_map = {}
     action_map["Move"] = GlobalCategoricalAction(idx, label)
@@ -73,3 +77,5 @@ def student_name_hook() -> str:
         str: Name of student
     """
     return 'Silas Springer'
+
+
