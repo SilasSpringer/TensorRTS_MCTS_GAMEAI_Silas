@@ -49,9 +49,9 @@ class MCTS_State(Observation):
     def takeAction(self, action):
         _game = Interactive_TensorRTS(enable_printouts=False) # make a game with state self.state
         _game.set_state(self.state)
-        _game.act(map_move(action[0], action[1])) # take the action specified
+        _game.act(map_move(action[0], action[1]), False, False, False) # take the action specified
         opp_rand_move = random.choice(self.action_space) # pick a random move for the opponent to do
-        return MCTS_State(_game.act(map_move(opp_rand_move[0], opp_rand_move[1])), self.action_space) # perform the opponent's move and return the resulting state.
+        return MCTS_State(_game.act(map_move(opp_rand_move[0], opp_rand_move[1]), False, True, False), self.action_space) # perform the opponent's move and return the resulting state.
     def isTerminal(self):
         return self.state.done
     def getReward(self):
