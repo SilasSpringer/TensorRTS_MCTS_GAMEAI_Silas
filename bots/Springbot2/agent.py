@@ -51,8 +51,9 @@ class MCTS_State(Observation):
         _game.set_state(self.state)
         _game.act(map_move(action[0], action[1]))
         opp_rand_move = random.choice(self.action_space)
-        _game.act(map_move(opp_rand_move[0], opp_rand_move[1]))
-        return MCTS_State(_game.act(map_move(action[0], action[1])), self.action_space)
+        return MCTS_State(_game.act(map_move(opp_rand_move[0], opp_rand_move[1])), self.action_space)
+        
+        # return MCTS_State(_game.act(map_move(action[0], action[1])), self.action_space)
     def isTerminal(self):
         return self.state.done
     def getReward(self):
